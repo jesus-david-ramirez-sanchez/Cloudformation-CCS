@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  ProjectName:
+    Type: String
+  EnvType:
+    Type: String
+
+Resources:
+           ###################### LAMBDA EDGE - HEADERS FRONT ######################
+  LambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - 'lambda.amazonaws.com'
+                - 'edgelambda.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+
+  LambdaPolicy:
+    Type: AWS::IAM::Policy
+    DependsOn:
+      - LambdaRole
+    Properties:
+      PolicyName: AWSLambdaEdgeExecutionRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:PutLogEvents
+              - logs:CreateLogStream
+              - logs:CreateLogGroup
+            Resource: arn:aws:logs:*:*:*
+      Roles:
+        - !Ref 'LambdaRole'
+
+  CloudfrontFunction:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - LambdaRole
+    Properties:
+      Description: Funcion lambda que modifica las cabeceras de seguridad
+      Code:
+        ZipFile: !Sub |
+         'use strict';
+          exports.handler = (event, context, callback) => {
+              //Get contents of response
+              const response = event.Records[0].cf.response;
+              const headers = response.headers;
+              //Set new headers
+              //new value header Access-Control-Allow-Origin
+              headers['strict-transport-security'] = [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubdomains; preload' }];
+              headers['x-content-type-options'] = [{ key: 'X-Content-Type-Options', value: 'nosniff' }];
+              headers['x-xss-protection'] = [{ key: 'X-XSS-Protection', value: '1; mode=block' }];
+              headers['referrer-policy'] = [{ key: 'Referrer-Policy', value: 'same-origin' }];
+              headers['access-control-allow-origin'] = [{ key: 'Access-Control-Allow-Origin', value: 'https://${DomainApp}' }];
+              headers['x-permitted-cross-domain-policies'] = [{ key: 'X-Permitted-Cross-Domain-Policies', value: 'master-only' }];
+              headers['cache-control'] = [{ key: 'Cache-Control', value: 'no-cache; must-revalidate; pre-check= 0; post-check= 0; max-age= 0; s-maxage= 0; no-store' }];
+              headers['pragma'] = [{ key: 'Pragma', value: 'no-cache' }];
+              headers['x-frame-options'] = [{ key: 'X-Frame-Options', value: 'DENY' }];
+              headers['expires'] = [{ key: 'Expires', value: '0' }];
+              //Return modified response
+              callback(null, response);
+          };
+      FunctionName:
+        Fn::Sub: headers-${ProjectName}-${EnvType}
+      Handler: index.handler
+      MemorySize: 128
+      Role:
+        Fn::GetAtt: LambdaRole.Arn
+      Runtime: nodejs14.x
+      Timeout: 3
+
+  # Lambda headers - Version
+  VersionedLambdaFunction:
+    Type: 'AWS::Lambda::Version'
+    Properties:
+      FunctionName:
+        Ref: CloudfrontFunction
+
+Outputs:
+  VersionedLambdaFunction:
+    Value: !Ref VersionedLambdaFunction

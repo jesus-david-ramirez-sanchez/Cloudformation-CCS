@@ -1,0 +1,156 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  ProjectName:
+    Type: String
+  EnvType:
+    Type: String
+  OperatorsGroup:
+    Type: String
+  ARNSSLCertificate:
+    Type: String
+  DomainApp:
+    Type: String
+  VersionedLambdaFunction:
+    Type: String
+
+Resources:
+  WebsiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref DomainApp
+      PublicAccessBlockConfiguration: 
+        BlockPublicAcls: false
+        IgnorePublicAcls: false
+        BlockPublicPolicy: false
+        RestrictPublicBuckets: false
+      WebsiteConfiguration: 
+        IndexDocument: index.html
+        ErrorDocument: index.html
+
+
+  SyncWebsiteBucketPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Join ["-", [!Ref ProjectName, bucket, sync]]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action:
+              - s3:GetObject*
+              - s3:PutObject*
+              - s3:DeleteObject*
+            Resource:
+              - !Join ["", ["arn:aws:s3:::", !Ref WebsiteBucket, "/*"]]
+          - Effect: "Allow"
+            Action:
+              - s3:ListBucket*
+              - s3:GetBucket*
+            Resource:
+              - !Join ["", ["arn:aws:s3:::", !Ref WebsiteBucket]]
+      Groups:
+        - !Ref OperatorsGroup
+
+
+  OriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Join [" ", ["CloudFront OAI for", !Ref WebsiteBucket]]
+
+
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebsiteBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Principal:
+              CanonicalUser: !GetAtt OriginAccessIdentity.S3CanonicalUserId
+            Effect: Allow
+            Action:
+              - s3:GetObject
+            Resource:
+              - !Join ["", ["arn:aws:s3:::", !Ref WebsiteBucket, "/*"]]
+
+
+  InvalidationPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Join ["-", [!Ref ProjectName, create, invalidation]]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action:
+              - cloudfront:CreateInvalidation
+            Resource:
+              - !Join ["", ["arn:aws:cloudfront::", !Ref "AWS::AccountId", ":distribution/", !Ref TheCloudFrontDistribution]]
+      Groups:
+        - !Ref OperatorsGroup
+
+  TheCloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment:
+          Fn::Sub: 'CloudFront OAI for ${DomainApp}'
+
+  ###################### CLOUDFRONT ######################
+  ## Con Certificado Generado 
+  TheCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Origins:
+          - DomainName:
+              Fn::Join: ['', [Ref: WebsiteBucket, '.s3.amazonaws.com']]
+            Id: the-s3-bucket
+            S3OriginConfig:
+              OriginAccessIdentity:
+                Fn::Join: ['', ['origin-access-identity/cloudfront/', Ref: TheCloudFrontOriginAccessIdentity]]
+        Enabled: true
+        HttpVersion: http2
+        DefaultRootObject: index.html
+        CustomErrorResponses:
+          - ErrorCachingMinTTL: 300
+            ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+        Aliases:
+          Condition: CreateProdResources
+            - !Ref WebsiteBucket
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - DELETE
+            - GET
+            - HEAD
+            - OPTIONS
+            - PATCH
+            - POST
+            - PUT
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+          TargetOriginId: the-s3-bucket
+          ViewerProtocolPolicy: redirect-to-https
+          LambdaFunctionAssociations:
+            - EventType: 'origin-response'
+              LambdaFunctionARN:
+                Ref: VersionedLambdaFunction
+
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          AcmCertificateArn: !Ref ARNSSLCertificate
+          MinimumProtocolVersion: TLSv1.2_2021
+          SslSupportMethod: sni-only
+
+
+Outputs:
+  DistributionId:
+    Value: !Ref TheCloudFrontDistribution
+  WebsiteURLCloudFront:
+    Value: !GetAtt TheCloudFrontDistribution.DomainName
+

@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  ProjectName:
+    Type: String
+  ARNSSLCertificate:
+    Type: String
+  DomainApp:
+    Type: String
+  EnvType:
+    Type: String
+  HostedZoneId:
+    Type: String
+
+Resources:
+  iam:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        ProjectName: !Ref ProjectName
+        EnvType: !Ref EnvType
+      TemplateURL: stack/iam.yaml
+
+  lambda:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        ProjectName: !Ref ProjectName
+        EnvType: !Ref EnvType
+      TemplateURL: stack/lambda.yaml
+
+
+  app:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        ProjectName: !Ref ProjectName
+        DomainApp: !Ref DomainApp
+        OperatorsGroup: !GetAtt iam.Outputs.OperatorsGroup
+        ARNSSLCertificate: !Ref ARNSSLCertificate
+        EnvType: !Ref EnvType
+        VersionedLambdaFunction: !GetAtt lambda.Outputs.VersionedLambdaFunction
+      TemplateURL: stack/app.yaml
+
+  Route53:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        DomainCloudFront: !GetAtt app.Outputs.WebsiteURLCloudFront
+        DomineAplication: !Ref DomainApp
+        HostedZoneId: !Ref HostedZoneId
+      TemplateURL: stack/route53.yaml
+
+Outputs:
+  WebsiteURLCloudFront:
+    Value: !GetAtt app.Outputs.WebsiteURLCloudFront
+  WebsiteDistributionId:
+    Value: !GetAtt app.Outputs.DistributionId
+  DomineName:
+    Value: !GetAtt Route53.Outputs.DomineAplication
+

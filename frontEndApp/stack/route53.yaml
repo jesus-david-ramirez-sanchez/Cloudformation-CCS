@@ -1,0 +1,25 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  DomainCloudFront:
+    Type: String
+  DomineAplication:
+    Type: String
+  HostedZoneId:
+    Type: String
+
+Resources:
+  DNS:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Comment: "DNS name for my FrontEnd App"
+      Name: !Ref DomineAplication
+      Type: CNAME
+      TTL: 900
+      ResourceRecords:
+        - !Ref DomainCloudFront
+
+Outputs:
+  DomineAplication:
+    Value: !Ref DomineAplication
