@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  ProjectName:
+    Type: String
+  EnvType:
+    Type: String
+    AllowedValues:
+      - prod
+      - dev
+  DomainApp:
+    Type: String
+  SSLCertificate:
+    Type: String
+  SSLCertificateApp:
+    Type: String
+  minSize:
+    Type: Number
+  maxSize:
+    Type: Number
+  InstanceType:
+    Type: String
+    Default: t3a.medium
+
+Resources:
+  iam:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        ProjectName: !Ref ProjectName
+        EnvType: !Ref EnvType
+      TemplateURL: stacks/iam.yaml
+
+  vpc:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        ProjectName: !Ref ProjectName
+      TemplateURL: stacks/vpc.yaml
+
+  elb:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        ProjectName: !Ref ProjectName
+        VpcId: !GetAtt vpc.Outputs.VpcId
+        SubnetIds: !GetAtt vpc.Outputs.SubnetIds
+        SSLCertificate: !Ref SSLCertificate
+      TemplateURL: stacks/elb.yaml
+
+  cluster:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        ProjectName: !Ref ProjectName
+        VpcId: !GetAtt vpc.Outputs.VpcId
+        SubnetIds: !GetAtt vpc.Outputs.SubnetIds
+        LoadBalancerSecurityGroup: !GetAtt elb.Outputs.LoadBalancerSecurityGroup
+        EnvType: !Ref EnvType
+        minSize: !Ref minSize
+        maxSize: !Ref maxSize
+        InstanceType: !Ref InstanceType
+      TemplateURL: stacks/cluster.yaml
+
+Outputs:
+  LoadBalancerURL:
+    Value: !GetAtt elb.Outputs.LoadBalancerURL
+  WebsiteURL:
+    Value: !GetAtt app.Outputs.WebsiteURL
+  VpcId: 
+    Value: !GetAtt vpc.Outputs.VpcId
+  SubnetIds: 
+    Value: !GetAtt vpc.Outputs.SubnetIds
