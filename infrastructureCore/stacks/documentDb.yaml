@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Parameters:
+  ProjectName:
+    Type: String
+  EnvType:
+    Type: String
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  PreferredMaintenanceWindow:
+    Description: Enter Preferred Maintenance Window Time (UTC).
+    Type: String
+    Default: Mond:01:00-Mond:03:00
+  PreferredBackupWindow:
+    Description: Enter Preferred Maintenance Window Time (UTC).
+    Type: String
+    Default: "07:34-08:04"
+  DbPort:
+    Description: Puerto que va a tener el cluster
+    Type: Number
+    Default: 6379
+  MasterUsername:
+    Type: String
+    Default: "UserMaster"
+  MasterUserPassword:
+    Type: String
+    Default: "passwordUser"
+Resources:
+  ###################### DocumentDB ######################
+
+  DocumentDbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: DocumentDB Security Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          Description: Acceso al Security group del cluster spot
+          FromPort: !Ref DbPort
+          ToPort: !Ref DbPort
+      VpcId: !Ref VpcId
+
+  DocumentDbSecurityGroupIngress:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref DocumentDbSecurityGroup
+      IpProtocol: tcp
+      FromPort: !Ref DbPort
+      ToPort: !Ref DbPort
+      SourceSecurityGroupId: !GetAtt DocumentDbSecurityGroup.GroupId
+  
+  DocumentDbInstance:
+    Type: "AWS::DocDB::DBCluster"
+    Properties:
+      BackupRetentionPeriod: 8
+      DBClusterIdentifier: !Join ['-', [!Ref ProjectName, !Ref EnvType, DocumentDB]]
+      DBSubnetGroupName: !Ref DocumentDbSecurityGroup
+      MasterUsername: !Ref MasterUsername
+      MasterUserPassword: !Ref MasterUserPassword
+      Port: !Ref DbPort
+      PreferredBackupWindow: !Ref PreferredBackupWindow
+      SnapshotIdentifier: "Snapshot-MongoDB-IOT"
+      PreferredMaintenanceWindow: !Ref PreferredMaintenanceWindow
+      StorageEncrypted: true

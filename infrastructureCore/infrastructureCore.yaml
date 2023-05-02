@@ -62,6 +62,27 @@ Resources:
         InstanceType: !Ref InstanceType
       TemplateURL: stacks/cluster.yaml
 
+  ElastiCache:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        ProjectName: !Ref ProjectName
+        EnvType: !Ref EnvType
+        SubnetIds: !GetAtt vpc.Outputs.SubnetIds
+        VpcId: !GetAtt vpc.Outputs.VpcId
+        OperatorsGroup: !GetAtt iam.Outputs.OperatorsGroup
+      TemplateURL: stacks/elastiCache.yaml
+  
+  DocumentDb:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        ProjectName: !Ref ProjectName
+        EnvType: !Ref EnvType
+        SubnetIds: !GetAtt vpc.Outputs.SubnetIds
+      TemplateURL: stacks/documentDb.yaml
+
+
 Outputs:
   LoadBalancerURL:
     Value: !GetAtt elb.Outputs.LoadBalancerURL

@@ -122,3 +122,7 @@ Outputs:
     Value: !Ref LogGroup
     Export:
       Name: !Join ["-", [!Ref ProjectName, !Ref EnvType, log, group]]
+  SecurityGroup:
+    Value: !Ref LogGroup
+    Export:
+      Name: !Join ["-", [!Ref ProjectName, !Ref EnvType, sg]]
